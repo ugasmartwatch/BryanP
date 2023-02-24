@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        .square {
+            width: 100px;
+            height: 100px;
+            background-color: red;
+        }
+    </style>
+      
+</head>
+<body>
+  <div id="square1" class="square">Swipe</div>
+  <div id="square2" class="square">Buzz</div>
+  <button id="myButton">Click Me</button>
+</body>
+
+<script>
+    const encoder = new TextEncoder();
+    var message = 1
+
+    function connectToBangle(){
+        options = {
+            filters: [{
+                 services: [0xBCDE] //remove if you dont want to search by service types
+            }],
+            //needed if searching solely by name or with no filter
+            //optionalServices: [0xBCDE]
+        };
+        navigator.bluetooth.requestDevice(options)
+        .then(device => {
+            console.log('Connected to ' + device.name);
+            return device.gatt.connect();
+        })
+        .then(server => {
+            console.log('Getting Is Swiped Service and Buzz Service');
+            return Promise.all([
+                server.getPrimaryService(0xBCDE),
+                server.getPrimaryService('3e442221-f5bb-357d-719d-179272e4d4d9')
+            ]);
+        })
+        .then(services => {
+            console.log('Getting Swiped Characteristic and Buzz Characteristic');
+            const [service1, service2] = services;
+            return Promise.all([
+                service2.getCharacteristic("3e443332-f5bb-357d-719d-179272e4d4d9"),
+                service1.getCharacteristic(0xABCD)
+            ]);
+        })
+        .then(characteristics => {
+            const [char1, char2] = characteristics;
+            
+            console.log('Enabling Writing to Buzz Characteristic')
+            square2.addEventListener('click', function() {
+                console.log("Buzzing!");
+                message++;
+                const buffer = encoder.encode(message).buffer;
+                char1.writeValue(buffer)
+            });
+            console.log('Reading Value of Swiped Characteristic');
+            char2.addEventListener('characteristicvaluechanged', event => {
+                console.log("Swiped characteristic changed: " + event.target.value.getUint8(0));
+                if(event.target.value.getUint8(0) ==1){
+                    square1.style.backgroundColor = 'blue';
+                } else {
+                    square1.style.backgroundColor = 'red';
+                }
+            });
+            char2.startNotifications();
+            return char2.readValue();
+        })
+        .catch(error => { console.log(error); });
+    }
+    
+    const square1 = document.getElementById("square1");
+    const square2 = document.getElementById("square2");
+
+    document.getElementById("myButton").addEventListener("click", function() {
+        connectToBangle();
+    });
+</script>
+</html>
